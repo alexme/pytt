@@ -24,9 +24,15 @@ class Fsm:
         self.end_states = set(end_states)
 
     def next(self, data):
-        yield from self.from_state[self.state](data)
+        try:
+            yield from self.from_state[self.state](data)
+        except KeyError:
+            pass
         self.state = self.transitions[self.state](data)
-        yield from self.to_state[self.state](data)
+        try:
+            yield from self.to_state[self.state](data)
+        except KeyError:
+            pass
         if self.state in self.end_states:
             raise EndStateException()
 
