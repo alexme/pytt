@@ -1,4 +1,10 @@
 """
+an Algo in an FSM which :
+- computes its pl through a book
+- send orders according to a stream2order callable
+- acknowledges execs and update position accordingly
+- runs from idle to idle state
+- can be monitored
 """
 
 from enum import Enum
@@ -6,9 +12,19 @@ from enum import Enum
 from .fsm import Fsm
 from ..market.dealing import Order
 from ..market.dealing import STATUS_EXEC
+from ..streams.abstract import STREAM_TYPE
 
 # consts
 ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'PL', 'CHECK_PL', 'STOPPED'])
+
+#stream2order
+class Stream2Order:
+    def __init__(self, stream_id, logic):
+        self.sid = stream_id
+        self.logic = logic
+
+    def __call__(self, data):
+        return self.logic(data)
 
 # book
 class BookAsset:
@@ -16,10 +32,15 @@ class BookAsset:
         self.instr = instr
         self.cash = 0.0
         self.position = 0.0
-        self.valo = None
+        self.last = None
+        self.pl_last = 0.0
 
     def to_num(self):
-        return self.instr.to_num(self.position, self.valo) + self.cash
+        return self.instr.to_num(self.position, self.last) + self.cash
+
+    def update_last(self, last):
+        self.last = last
+        self.pl_last = self.to_num()
 
 # class
 class Algo(Fsm):
@@ -36,7 +57,6 @@ class Algo(Fsm):
         # TRADER
         self.pl_limit = pl_limit
         self.book = { a: BookAsset(a) for a in ticker_traded }
-        self.pl_asset_last = { a: 0.0 for a in ticker_traded }
         self.pl_last = 0.0
 
     # algo run from idle to idle ie it is looping on idle state
@@ -67,6 +87,8 @@ class Algo(Fsm):
         return ALGO_STATES.STOPPED
 
     def trans_idle(self, data):
+        if data.type == STREAM_TYPE.DATA:
+            pass
         if data.ticker not in self.positions:
             return ALGO_STATES.SIGNAL
         return ALGO_STATES.PL
