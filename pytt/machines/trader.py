@@ -1,12 +1,14 @@
 """
 """
 
-from fsm import Fsm
-from market.dealing import Order
-from market.dealing import STATUS_EXEC
+from enum import Enum
+
+from .fsm import Fsm
+from ..market.dealing import Order
+from ..market.dealing import STATUS_EXEC
 
 # consts
-STATES = Enum('IDLE', 'SIGNAL', 'PL', 'CHECK_PL', 'STOPPED')
+ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'PL', 'CHECK_PL', 'STOPPED'])
 
 # book
 class BookAsset:
@@ -23,14 +25,14 @@ class BookAsset:
 class Algo(Fsm):
     def __init__(self, order_q, exec_q, ticker_traded, signal, pl_limit):
         # FSM
-        t_tbl = { STATES.IDLE: self.trans_idle,
-                  STATES.PL: self.trans_pl,
-                  STATES.CHECK_PL: self.trans_check_pl,
-                  STATES.SIGNAL: self.trans_signal,
-                  STATES.STOPPED: self.trans_stop }
-        to_tbl = { STATES.IDLE: self.to_idle }
+        t_tbl = { ALGO_STATES.IDLE: self.trans_idle,
+                  ALGO_STATES.PL: self.trans_pl,
+                  ALGO_STATES.CHECK_PL: self.trans_check_pl,
+                  ALGO_STATES.SIGNAL: self.trans_signal,
+                  ALGO_STATES.STOPPED: self.trans_stop }
+        to_tbl = { ALGO_STATES.IDLE: self.to_idle }
         from_tbl = {}
-        super().__init__(STATES.IDLE, t_tbl, from_tbl, to_tbl, [STATES.STOPPED])
+        super().__init__(ALGO_STATES.IDLE, t_tbl, from_tbl, to_tbl, [ALGO_STATES.STOPPED])
         # TRADER
         self.pl_limit = pl_limit
         self.book = { a: BookAsset(a) for a in ticker_traded }
@@ -39,7 +41,7 @@ class Algo(Fsm):
 
     # algo run from idle to idle ie it is looping on idle state
     def one_loop(self, data):
-        yield from self.next_to(data, STATES.IDLE)
+        yield from self.next_to(data, ALGO_STATES.IDLE)
 
     # pl
     def compute_pl(self):
@@ -61,28 +63,31 @@ class Algo(Fsm):
             self.book[e.ticker].position += e.qty
 
     #fonctions de transition
+    def trans_stop(self, data):
+        return ALGO_STATES.STOPPED
+
     def trans_idle(self, data):
         if data.ticker not in self.positions:
-            return STATES.SIGNAL
-        return STATES.PL
+            return ALGO_STATES.SIGNAL
+        return ALGO_STATES.PL
 
     def trans_pl(self, data):
         if data.ticker in self.book:
             if self.book[data.ticker].position != 0:
-                return STATES.CHECK_PL
-        return STATES.SIGNAL
+                return ALGO_STATES.CHECK_PL
+        return ALGO_STATES.SIGNAL
 
     def trans_check_pl(self, data):
         # we know that it s a traded asset
         self.book[data.ticker].valo = data.last
         self.pl_last = self.compute_pl()
         if self.pl_last < self.pl_limit:
-            return STATES.STOPPED
-        return STATES.SIGNAL
+            return ALGO_STATES.STOPPED
+        return ALGO_STATES.SIGNAL
 
     def trans_signal(self, data):
         # change this
         ret = self.signal(data)
         if abs(ret) > 10:
             self.order_q.append(Order(data.ticker, -ret/abs(ret)))
-        return STATES.IDLE
+        return ALGO_STATES.IDLE
