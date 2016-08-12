@@ -18,8 +18,13 @@ streams are :
 
 from .streams.model import gbm_source
 from .machines.trader import Algo
-from .streams.cstream import ZS
-from .streams.abstract import LList
+from .streams.utils import ZS
+from .streams import SeqStreamSelector, GenStream, Cstream
+
+#dev only please move it to streams
+
+
+
 
 def main():
     stream_q = []
@@ -31,11 +36,12 @@ def main():
     ostream = Stream(sid=1, [])
     estream = Stream(sid=2, [])
     while True:
-        #events = sel.select
-        for zs in map(zs, gbm_source(2)):
-            dstream.add(zs)
+        for evts in sel.select():
+            print(evts)
+        # for zs in map(zs, gbm_source(2)):
+        #     dstream.add(zs)
 
-            a.one_loop(data)
+        #     a.one_loop(data)
     #     data = stream_q.pop()
     #     res = yield from a.one_loop(data)
     z = ZS(10)

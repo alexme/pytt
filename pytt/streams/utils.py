@@ -1,11 +1,20 @@
 """
-cstream
+various utils
 for online stats
 https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
 """
 
 from collections import deque
 import numpy as np
+import functools
+
+def coroutine(f):
+    @functools.wrap(f)
+    def wrapper(*args, **kwargs):
+        cr = f(*args, **kwargs)
+        next(cr)
+        return cr
+    return wrapper
 
 
 class Avg:
