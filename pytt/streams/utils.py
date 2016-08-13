@@ -9,7 +9,7 @@ import numpy as np
 import functools
 
 def coroutine(f):
-    @functools.wrap(f)
+    @functools.wraps(f)
     def wrapper(*args, **kwargs):
         cr = f(*args, **kwargs)
         next(cr)

@@ -19,11 +19,7 @@ streams are :
 from .streams.model import gbm_source
 from .machines.trader import Algo
 from .streams.utils import ZS
-from .streams import SeqStreamSelector, GenStream, Cstream
-
-#dev only please move it to streams
-
-
+from .streams.abstract import SeqSrcStreamSelector, GenStream, CStream
 
 
 def main():
@@ -32,9 +28,10 @@ def main():
     exec_q = []
     # a = Algo(order_q, exec_q, ['stxec1'], signal, -10000)
     z = ZS(10)
-    dstream = Stream(sid=0, LList(max_len=3))
-    ostream = Stream(sid=1, [])
-    estream = Stream(sid=2, [])
+    sstream = GenStream(0, gbm_source(2))
+    cstream = CStream(1, sstream, z)
+    sel = SeqSrcStreamSelector()
+    sel.register(sstream, lambda x: x)
     while True:
         for evts in sel.select():
             print(evts)
@@ -44,12 +41,12 @@ def main():
         #     a.one_loop(data)
     #     data = stream_q.pop()
     #     res = yield from a.one_loop(data)
-    z = ZS(10)
-    for i, x in enumerate(gbm_source(2)):
-        # print(x)
-        print(z(x))
-        if i > 500:
-            break
+    # z = ZS(10)
+    # for i, x in enumerate(gbm_source(2)):
+    #     # print(x)
+    #     print(z(x))
+    #     if i > 500:
+    #         break
 
 
 
