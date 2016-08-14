@@ -11,6 +11,7 @@ and could lead to inconsistent signals in the tree
 from enum import Enum
 from .utils import coroutine
 
+import pdb
 
 STREAM_TYPE = Enum('StreamType', ['DATA', 'EXEC'])
 
@@ -56,7 +57,7 @@ class CStream(LeafStream, ParentStream):
         self.prt_stm._add_stream(self)
         self.q = []
         self.stm_q = []
-        self.m = None
+        self.m = -27
 
     # needs addtitional coding here to replace the
     # update of child nodes which could lead to
@@ -77,8 +78,13 @@ class CStream(LeafStream, ParentStream):
 
 class SeqSrcStreamSelector:
     """
-    not great for demo only
-    need to register to call read register src only
+    not great for demo only ?
+    if the src of a leaf stream is not registered then
+    the src read method will not be called and the leaf
+    will never be computed moreover only leaves for which the src has been
+    added will be called as a ersult we automatically register the src
+    with a None callback 
+    -> this is messy I really don t like it
     """
     def __init__(self):
         self.src_q = {}
@@ -87,6 +93,12 @@ class SeqSrcStreamSelector:
         self.i = self.n = 0
 
     def is_registered(self, stm):
+        # a bit more tricky than could be thought
+        # if it has been registered with a none callback
+        # we actually consider it as non regitered for 
+        # this function see pb in intro of class
+        if (stm in self.src_q) and (self.src_q[stm] is None):
+            return False
         return (stm in self.src_q) or (stm in self.leaf_q)
 
     def register(self, stm, cb):
@@ -94,13 +106,18 @@ class SeqSrcStreamSelector:
             return
         if isinstance(stm, LeafStream):
             self.leaf_q[stm] = cb
-            # prt_stm = stm.prt_stm
-            # self.register(prt_stm, None)
+            p_stm = stm
+            # registering root of tree mecanism
+            while not isinstance(p_stm, SrcStream):
+                p_stm = p_stm.prt_stm
+            self.register(p_stm, None)
         elif isinstance(stm, SrcStream):
             self.src_q[stm] = cb
             self.seq.append(stm)
 
     def select(self):
+        if not self.src_q:
+            raise ValueError('SeqSrc stream must have at least one src registered')
         evts = []
         self.n += 1
         self.i = (self.i + 1) % len(self.src_q)
@@ -110,12 +127,15 @@ class SeqSrcStreamSelector:
         while _q:
             x = _q.pop()
             if isinstance(x, SrcStream):
-                evts.append(self.src_q[stm](stm.read()))
+                if self.src_q[x] is None:
+                    x.read()
+                else:
+                    evts.append(self.src_q[x](x.read()))
             elif isinstance(x, LeafStream):
-                evts.append(self.leaf_q[stm](stm.read()))
+                evts.append(self.leaf_q[x](x.read()))
             else:
                 raise ValueError()
-            for y in x.q:
+            for y in x.stm_q:
                 if self.is_registered(y):
                     _q.append(y)
         return evts

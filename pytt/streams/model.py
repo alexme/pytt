@@ -1,10 +1,13 @@
 import numpy as np
 
+import pdb
+
 def gbm(s0_v, drift_v, cov_mat, dt):
     # checks
     n = drift_v.size
     if s0_v.size != n:
         raise ValueError()
+    cov_mat = np.array(cov_mat, ndmin=2)
     if cov_mat.shape != (n, n):
         raise ValueError()
     # init
