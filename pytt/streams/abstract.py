@@ -46,7 +46,7 @@ class GenStream(SrcStream, ParentStream):
         self.m = next(self.g)
         for x in self.q:
             x.send(self.m)
-        return self.m
+        yield self.m
         # return ParentStream.update_childs(self)
 
 
@@ -76,7 +76,7 @@ class CStream(LeafStream, ParentStream):
     def read(self):
         # self.m = self.f(self.x)
         # return ParentStream.update_childs(self)
-        return self.m
+        yield self.m
 
 class MStream(LeafStream):
     """
@@ -100,16 +100,13 @@ class MStream(LeafStream):
                 self.order_book[i] = m
 
     def run_matcing_engine(self):
-        resps = []
         for i in self.instr_list:
             while i.orders:
                 o = i.orders.pop()
-                exec_resp = o.send((ORDER_STATUS.FILLED, self.order_book[i]))
-                resps.append(exec_resp)
-        return resps
+                yield o.send((ORDER_STATUS.FILLED, self.order_book[i]))
 
     def read(self):
-        return self.run_matcing_engine()
+        yield from self.run_matcing_engine()
 
 
 class SeqSrcStreamSelector:
@@ -123,8 +120,9 @@ class SeqSrcStreamSelector:
     -> this is messy I really don t like it
     """
     def __init__(self):
-        self.src_q = {}
-        self.leaf_q = {}
+        self.stm_map = {}
+        # self.src_q = {}
+        # self.leaf_q = {}
         self.seq = []
         self.i = self.n = 0
 
@@ -133,47 +131,49 @@ class SeqSrcStreamSelector:
         # if it has been registered with a none callback
         # we actually consider it as non regitered for 
         # this function see pb in intro of class
-        if (stm in self.src_q) and (self.src_q[stm] is None):
+        # if (stm in self.src_q) and (self.src_q[stm] is None):
+        if (stm in self.stm_map) and (self.stm_map[stm] is None):
             return False
-        return (stm in self.src_q) or (stm in self.leaf_q)
+        # return (stm in self.src_q) or (stm in self.leaf_q)
+        return (stm in self.stm_map)
 
     def register(self, stm, cb):
         if self.is_registered(stm):
             return
         if isinstance(stm, LeafStream):
-            self.leaf_q[stm] = cb
+            self.stm_map[stm] = cb
             p_stm = stm
             # registering root of tree mecanism
             while not isinstance(p_stm, SrcStream):
                 p_stm = p_stm.prt_stm
             self.register(p_stm, None)
         elif isinstance(stm, SrcStream):
-            self.src_q[stm] = cb
+            # self.src_q[stm] = cb
+            self.stm_map[stm] = cb
             self.seq.append(stm)
 
     def select(self):
-        if not self.src_q:
+        if not self.seq:
             raise ValueError('SeqSrc stream must have at least one src registered')
-        evts = []
+        # evts = []
         self.n += 1
-        self.i = (self.i + 1) % len(self.src_q)
+        self.i = (self.i + 1) % len(self.seq)
         stm = self.seq[self.i]
         # traverse tree
         _q = [stm]
         while _q:
             x = _q.pop()
             if isinstance(x, SrcStream):
-                if self.src_q[x] is None:
-                    x.read()
+                if self.stm_map[x] is None:
+                    next(x.read()) # needs to consume the gen without doing anything please check
                 else:
-                    evts.append(self.src_q[x](x.read()))
+                    yield from map(self.stm_map[x], x.read())
             elif isinstance(x, LeafStream):
-                evts.append(self.leaf_q[x](x.read()))
+                yield from map(self.stm_map[x], x.read())
             else:
                 raise ValueError()
             # if stream is leaf then stm_q = []
             for y in x.stm_q:
                 if self.is_registered(y):
                     _q.append(y)
-        return evts
 

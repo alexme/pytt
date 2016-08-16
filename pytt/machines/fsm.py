@@ -23,20 +23,22 @@ class Fsm:
         self.state = state_start
         self.end_states = set(end_states)
 
-    def next(self, data):
-        try:
-            yield from self.from_state[self.state](data)
-        except KeyError:
-            pass
-        self.state = self.transitions[self.state](data)
-        try:
-            yield from self.to_state[self.state](data)
-        except KeyError:
-            pass
+    def next(self, *args):
+        # try:
+        #     yield from self.from_state[self.state](*args)
+        # except KeyError:
+        #     pass
+        self.state = self.transitions[self.state](*args)
+        # try:
+        #     yield from self.to_state[self.state](*args)
+        # except KeyError:
+        #     pass
         if self.state in self.end_states:
             raise EndStateException()
 
-    def next_to(self, data, tgt_state):
-        yield from self.next(data)
+    def next_to(self, tgt_state, *args):
+        # yield from self.next(*args)
+        self.next(*args)
         while self.state != tgt_state:
-            yield from self.next(data)
+            self.next(*args)
+            # yield from self.next(*args)
