@@ -11,6 +11,8 @@ and could lead to inconsistent signals in the tree
 from enum import Enum
 from .utils import coroutine
 
+from ..market.dealing import ORDER_STATUS
+
 import pdb
 
 STREAM_TYPE = Enum('StreamType', ['DATA', 'EXEC'])
@@ -76,6 +78,40 @@ class CStream(LeafStream, ParentStream):
         # return ParentStream.update_childs(self)
         return self.m
 
+class MStream(LeafStream):
+    """
+    to keep the signal tree structure only one source
+    can feed a market stream seveal assets => src stream in R**n n>1
+    instr_list elements are market.asset.Instrument
+    """
+    def __init__(self, sid, instr_list, prt_stm):
+        self.sid = sid
+        self.order_book = {x: None for x in instr_list}
+        self.instr_list = instr_list
+        self.prt_stm = prt_stm
+        self.prt_stm._add_stream(self)
+        self.stm_q = []
+
+    @coroutine
+    def _f(self):
+        while True:
+            mkt_up = (yield)
+            for i, m in zip(self.instr_list, mkt_up):
+                self.order_book[i] = m
+
+    def run_matcing_engine(self):
+        resps = []
+        for i in self.instr_list:
+            while i.orders:
+                o = i.orders.pop()
+                exec_resp = o.send((ORDER_STATUS.FILLED, self.order_book[i]))
+                resps.append(exec_resp)
+        return resps
+
+    def read(self):
+        return self.run_matcing_engine()
+
+
 class SeqSrcStreamSelector:
     """
     not great for demo only ?
@@ -135,6 +171,7 @@ class SeqSrcStreamSelector:
                 evts.append(self.leaf_q[x](x.read()))
             else:
                 raise ValueError()
+            # if stream is leaf then stm_q = []
             for y in x.stm_q:
                 if self.is_registered(y):
                     _q.append(y)

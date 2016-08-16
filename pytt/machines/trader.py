@@ -10,9 +10,9 @@ an Algo in an FSM which :
 from enum import Enum
 
 from .fsm import Fsm
-from ..market.dealing import Order
-from ..market.dealing import STATUS_EXEC
-from ..streams.abstract import STREAM_TYPE
+# from ..market.dealing import Order
+# from ..market.dealing import STATUS_EXEC
+# from ..streams.abstract import STREAM_TYPE
 
 # consts
 ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'PL', 'CHECK_PL', 'STOPPED'])
