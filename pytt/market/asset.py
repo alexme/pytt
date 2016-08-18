@@ -25,7 +25,7 @@ class Instrument:
         statements instead of only 2
         """
         status, pce = (yield)
-        yield (self.asset, qty, pce)
+        yield (self, qty, pce)
 
 class Asset:
     def __init__(self, ticker):
