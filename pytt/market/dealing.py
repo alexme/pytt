@@ -4,7 +4,9 @@ main class dealing with order passing etc
 from enum import Enum
 
 #consts
-ORDER_STATUS = Enum('OrderStatus', ['FILLED'])
+ORDER_STATUS = Enum('OrderStatus', ['HIT', 'CANCEL'])
+EXEC_STATUS = Enum('ExecStatus', ['FILLED', 'CANCELLED', 'PENDING'])
+DONE_STATUS = ( EXEC_STATUS.FILLED, EXEC_STATUS.CANCELLED )
 
 # STATUS_EXEC = Enum('Exec status', ['DONE', 'DENIED'])
 

@@ -8,6 +8,7 @@ an Algo in an FSM which :
 """
 
 from enum import Enum
+import numpy as np
 
 from .fsm import Fsm
 # from ..market.dealing import Order
@@ -44,7 +45,13 @@ class BookAsset:
 
 # class
 class Algo(Fsm):
-    def __init__(self, trd_instr_list, signal, pl_limit):
+    """
+    cstream -> compute orders to send -> send orders -> wait for exec
+    datastream -> compute pl -> check if stopped
+    marketstream -> compute position 
+    """
+
+    def __init__(self, instr_list, signal, pl_limit):
         # FSM
         t_tbl = { ALGO_STATES.IDLE: self.trans_idle,
                   ALGO_STATES.PL: self.trans_pl,
@@ -56,8 +63,11 @@ class Algo(Fsm):
         from_tbl = {}
         super().__init__(ALGO_STATES.IDLE, t_tbl, from_tbl, to_tbl, [ALGO_STATES.STOPPED])
         # TRADER
+        self.sigma = 1
         self.pl_limit = pl_limit
-        self.book = { a.asset: BookAsset(a.asset) for a in trd_instr_list }
+        self.orders = {a:[] for a in instr_list}
+        self.positions = {a:0.0 for a in instr_list}
+        # self.book = { a.asset: BookAsset(a.asset) for a in instr_list }
         self.pl_last = 0.0
 
     # algo run from idle to idle ie it is looping on idle state
@@ -91,13 +101,10 @@ class Algo(Fsm):
 
     def trans_idle(self, stm, data):
         if isinstance(stm, MStream):
-            print('got mkt check bon instrument')
             return ALGO_STATES.POSITION
         elif isinstance(stm, CStream):
-            print('got com data check bon instrument')
             return ALGO_STATES.SIGNAL
         elif isinstance(stm, GenStream):
-            print('got gen data check bon instrument')
             return ALGO_STATES.PL
         else:
             raise ValueError('unknown stream')
@@ -127,4 +134,17 @@ class Algo(Fsm):
         # ret = self.signal(data)
         # if abs(ret) > 10:
         #     self.order_q.append(Order(data.ticker, -ret/abs(ret)))
+        got_sig = np.abs(data) > self.sigma
+        sig = np.sign(data) * got_sig
+        for i, inst in enumerate(self.instr_list):
+            pass
+            # I AM HERE FINISH HERE
+            # if position is correct and orders then cancel them
+            # if position is not correct
+            #      if no pending order
+            #           - send order
+            #      else:
+            #           - all order not in correct way cancel them
+            #           - sum the position taken if all good orders filled
+            #           send order to fill the rest
         return ALGO_STATES.IDLE
