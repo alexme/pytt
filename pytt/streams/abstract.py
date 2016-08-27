@@ -11,7 +11,7 @@ and could lead to inconsistent signals in the tree
 from enum import Enum
 from .utils import coroutine
 
-from ..market.dealing import ORDER_STATUS
+from ..market.dealing import ORDER_STATUS, EXEC_STATUS
 
 import pdb
 
@@ -86,8 +86,10 @@ class MStream(LeafStream):
     """
     def __init__(self, sid, instr_list, prt_stm):
         self.sid = sid
-        self.order_book = {x: None for x in instr_list}
+        self.price_book = {x: None for x in instr_list}
         self.instr_list = instr_list
+        for i in instr_list:
+            i._bind_market(self)
         self.prt_stm = prt_stm
         self.prt_stm._add_stream(self)
         self.stm_q = []
@@ -97,16 +99,22 @@ class MStream(LeafStream):
         while True:
             mkt_up = (yield)
             for i, m in zip(self.instr_list, mkt_up):
-                self.order_book[i] = m
+                self.price_book[i] = m
 
-    def run_matcing_engine(self):
+    def run_matching_engine(self):
         for i in self.instr_list:
             while i.orders:
                 o = i.orders.pop()
-                yield o.send((ORDER_STATUS.FILLED, self.order_book[i]))
+                status, qty = next(o)
+                print(status, qty)
+                if status == ORDER_STATUS.HIT:
+                    o.send((EXEC_STATUS.FILLED, self.price_book[i]))
+                elif status == ORDER_STATUS.CANCEL:
+                    o.send((EXEC_STATUS.CANCELLED, self.price_book[i]))
+
 
     def read(self):
-        yield from self.run_matcing_engine()
+        yield from self.run_matching_engine()
 
 
 class SeqSrcStreamSelector:

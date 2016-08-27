@@ -14,9 +14,12 @@ class Instrument:
     def __init__(self, asset):
         self.asset = asset
         self.orders = []
+        self.mkt = None # no market binded not tradable
 
-    def send_order(self, qty, client):
-        self.orders.append(self._o(qty, client))
+    def send_order(self, order_tpe, qty, client):
+        cr = self._o(order_tpe, qty, client)
+        self.orders.append(cr)
+        return cr
 
     # @coroutine
     # def _o(self, qty):
@@ -31,11 +34,22 @@ class Instrument:
     #     yield (self, qty, pce)
 
     @coroutine
-    def _o(self, qty, client):
-        status = EXEC_STATUS.PENDING
-        while not status in DONE_STATUS:
-            status, pce = (yield status, qty)
-        print('done')
+    def _o(self, status, qty, client):
+        yield
+        while True:
+            # here we can imagine more complex execs pce would
+            # then be a more complex structure
+            status, pce = (yield (status, qty))
+            if status in DONE_STATUS:
+                break
+            yield
+        # here cancel order book ? should be ok as orders are popped from market
+        return (status, pce, qty)
+
+    # to be tradable an instrumen needs to be binded to a MarketStream
+    # which will take car of the exec
+    def _bind_market(self, mkt):
+        self.mkt = mkt
 
 class Asset:
     def __init__(self, ticker):
