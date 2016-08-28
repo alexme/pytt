@@ -9,10 +9,11 @@ an Algo in an FSM which :
 
 from enum import Enum
 import numpy as np
+from collections import defaultdict
 
 from .fsm import Fsm
 # from ..market.dealing import Order
-# from ..market.dealing import STATUS_EXEC
+from ..market.dealing import ORDER_STATUS
 from ..streams.abstract import MStream, CStream, GenStream
 
 # consts
@@ -130,21 +131,23 @@ class Algo(Fsm):
         return ALGO_STATES.SIGNAL
 
     def trans_signal(self, stm, data):
-        # change this
-        # ret = self.signal(data)
-        # if abs(ret) > 10:
-        #     self.order_q.append(Order(data.ticker, -ret/abs(ret)))
         got_sig = np.abs(data) > self.sigma
         sig = np.sign(data) * got_sig
         for i, inst in enumerate(self.instr_list):
-            pass
-            # I AM HERE FINISH HERE
-            # if position is correct and orders then cancel them
-            # if position is not correct
-            #      if no pending order
-            #           - send order
-            #      else:
-            #           - all order not in correct way cancel them
-            #           - sum the position taken if all good orders filled
-            #           send order to fill the rest
+            tgt_qty = - sig[i]
+            if not self.orders[inst]:
+                if not my_sig:
+                    continue
+                inst.send_order(ORDER_STATUS.HIT, tgt_qty, self)
+            else:
+                cum_qty = 0
+                for o in self.orders:
+                    s, q = next(o)
+                    if q * tgt_qty < 0:
+                        o.send((ORDER_STATUS.CANCEL, q))
+                    else:
+                        if s != ORDER_STATUS.CANCEL:
+                            cum_qty += q
+                if cum_qty:
+                    inst.send_order(ORDER_STATUS.HIT, tgt_qty-cum_qty, self)
         return ALGO_STATES.IDLE

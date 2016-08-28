@@ -16,8 +16,9 @@ class Instrument:
         self.orders = []
         self.mkt = None # no market binded not tradable
 
-    def send_order(self, order_tpe, qty):
-        cr = self._o(order_tpe, qty)
+    def send_order(self, order_tpe, qty, client):
+        cr = self._o(order_tpe, qty, client)
+        client.orders[self].append(cr)
         self.orders.append(cr)
         return cr
 
@@ -34,7 +35,7 @@ class Instrument:
     #     yield (self, qty, pce)
 
     @coroutine
-    def _o(self, status, qty):
+    def _o(self, status, qty, client):
         yield
         while True:
             # here we can imagine more complex execs pce would
@@ -43,8 +44,7 @@ class Instrument:
             if status in DONE_STATUS:
                 break
             yield
-        # here cancel order book ? should be ok as orders are popped from market
-        return (status, pce, qty)
+        return (status, pce, qty, client)
 
     # to be tradable an instrumen needs to be binded to a MarketStream
     # which will take car of the exec

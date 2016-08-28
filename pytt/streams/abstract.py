@@ -2,10 +2,6 @@
 Streams are a forest each SrcStream being the root of one tree
 this is a strong limitation as you can t have a leaf stream depending on
 more than one signal
-
-very lasy update that could be simplified via
-simple acessor BUT this lazinees is potentially dangerous
-and could lead to inconsistent signals in the tree
 """
 
 from enum import Enum
@@ -103,17 +99,29 @@ class MStream(LeafStream):
 
     def run_matching_engine(self):
         for i in self.instr_list:
+            orders_push_back = []
             while i.orders:
                 o = i.orders.pop()
                 status, qty = next(o)
-                print(status, qty)
-                if status == ORDER_STATUS.HIT:
-                    o.send((EXEC_STATUS.FILLED, self.price_book[i]))
-                elif status == ORDER_STATUS.CANCEL:
-                    o.send((EXEC_STATUS.CANCELLED, self.price_book[i]))
-
+                try:
+                    if status == ORDER_STATUS.HIT:
+                        o.send((EXEC_STATUS.FILLED, self.price_book[i]))
+                    elif status == ORDER_STATUS.CANCEL:
+                        o.send((EXEC_STATUS.CANCELLED, self.price_book[i]))
+                    else:
+                        orders_push_back.append(o)
+                        raise ValueError("order status unknown")
+                except StopIteration as e:
+                    status, pce, qty, cli = e.value
+                    index = cli.orders[i].index(o)
+                    del cli.orders[i][index]
+                    yield e.value
+            i.orders = orders_push_back
 
     def read(self):
+        # do 2 things :
+        # - run the ;atching engine
+        # - send the execs and cancelled
         yield from self.run_matching_engine()
 
 
