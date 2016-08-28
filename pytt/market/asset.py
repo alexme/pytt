@@ -16,8 +16,8 @@ class Instrument:
         self.orders = []
         self.mkt = None # no market binded not tradable
 
-    def send_order(self, order_tpe, qty, client):
-        cr = self._o(order_tpe, qty, client)
+    def send_order(self, order_tpe, qty):
+        cr = self._o(order_tpe, qty)
         self.orders.append(cr)
         return cr
 
@@ -34,7 +34,7 @@ class Instrument:
     #     yield (self, qty, pce)
 
     @coroutine
-    def _o(self, status, qty, client):
+    def _o(self, status, qty):
         yield
         while True:
             # here we can imagine more complex execs pce would
