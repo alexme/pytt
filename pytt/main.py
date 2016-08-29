@@ -25,7 +25,6 @@ from .streams.abstract import SeqSrcStreamSelector, GenStream, CStream, MStream
 from .market.asset import Instrument, Future
 import pdb
 
-
 def main():
     # intruments
     f1 = Instrument(Future('f1', 5))
@@ -49,28 +48,12 @@ def main():
     # sel.register(sstream, lambda x: x)
     i = 0
     while True:
-        print('*' * 20)
-        # i += 1
-        # if i % 2:
-        #     f1.send_order(1)
-        # else:
-        #     f2.send_order(4)
+        i += 1
         for evts in sel.select():
-            print(evts)
-        # for zs in map(zs, gbm_source(2)):
-        #     dstream.add(zs)
-
-        #     a.one_loop(data)
-    #     data = stream_q.pop()
-    #     res = yield from a.one_loop(data)
-    # z = ZS(10)
-    # for i, x in enumerate(gbm_source(2)):
-    #     # print(x)
-    #     print(z(x))
-    #     if i > 500:
-    #         break
-
-
+            for x in a.book.values():
+                print(x)
+        if i > 20:
+            break
 
 if __name__ == "__main__":
     main()

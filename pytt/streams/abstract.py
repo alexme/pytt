@@ -115,7 +115,7 @@ class MStream(LeafStream):
                     status, pce, qty, cli = e.value
                     index = cli.orders[i].index(o)
                     del cli.orders[i][index]
-                    yield e.value
+                    yield (i, status, pce, qty, cli)
             i.orders = orders_push_back
 
     def read(self):

@@ -13,11 +13,11 @@ from collections import defaultdict
 
 from .fsm import Fsm
 # from ..market.dealing import Order
-from ..market.dealing import ORDER_STATUS
+from ..market.dealing import ORDER_STATUS, EXEC_STATUS
 from ..streams.abstract import MStream, CStream, GenStream
 
 # consts
-ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'POSITION', 'PL', 'CHECK_PL', 'STOPPED'])
+ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'POSITION', 'PL', 'CHECK_PL', 'UPDATE', 'STOPPED'])
 
 #stream2order
 class Stream2Order:
@@ -28,21 +28,18 @@ class Stream2Order:
     def __call__(self, data):
         return self.logic(data)
 
-# book
+# book could be a namedtuple
 class BookAsset:
-    def __init__(self, instr):
-        self.instr = instr
+    __slots__ = ('cash', 'position', 'last', 'pl_last')
+
+    def __init__(self):
         self.cash = 0.0
         self.position = 0.0
         self.last = None
         self.pl_last = 0.0
 
-    def to_num(self):
-        return self.instr.to_num(self.position, self.last) + self.cash
-
-    def update_last(self, last):
-        self.last = last
-        self.pl_last = self.to_num()
+    def __str__(self):
+        return "(pl: %f.0, position: %i, last: %f.1)" % (self.pl_last, self.position, self.last)
 
 # class
 class Algo(Fsm):
@@ -57,18 +54,20 @@ class Algo(Fsm):
         t_tbl = { ALGO_STATES.IDLE: self.trans_idle,
                   ALGO_STATES.PL: self.trans_pl,
                   ALGO_STATES.CHECK_PL: self.trans_check_pl,
+                  ALGO_STATES.UPDATE: self.trans_update,
                   ALGO_STATES.SIGNAL: self.trans_signal,
                   ALGO_STATES.POSITION: self.trans_position,
                   ALGO_STATES.STOPPED: self.trans_stop }
-        to_tbl = { ALGO_STATES.IDLE: self.to_idle }
+        # to_tbl = { ALGO_STATES.IDLE: self.to_idle }
         from_tbl = {}
+        to_tbl = {}
         super().__init__(ALGO_STATES.IDLE, t_tbl, from_tbl, to_tbl, [ALGO_STATES.STOPPED])
         # TRADER
+        self.instr_list = instr_list
         self.sigma = 1
         self.pl_limit = pl_limit
         self.orders = {a:[] for a in instr_list}
-        self.positions = {a:0.0 for a in instr_list}
-        # self.book = { a.asset: BookAsset(a.asset) for a in instr_list }
+        self.book = { a: BookAsset() for a in instr_list }
         self.pl_last = 0.0
 
     # algo run from idle to idle ie it is looping on idle state
@@ -76,29 +75,26 @@ class Algo(Fsm):
         self.next_to(ALGO_STATES.IDLE, stm, data)
         # yield from self.next_to(ALGO_STATES.IDLE, stm, data)
 
-    # pl
-    def compute_pl(self):
-        # can use reduce here
-        pl = 0.0
-        for k, v in self.book.items():
-            pl += v.to_num()
-        return pl
+    # methods
+    def check_limit(self, tgt_position):
+        # can t be a state as its needs some tgt
+        # otherwise we could send orders and go to a check_limit state
+        # and cancel orders actually probably not a great idea
+        pass
 
     # end transition fun
     def to_idle(self, stm, data):
         """ we check exec before idle state """
         pass
-        # while self.exec_q:
-        #     e = self.exec_q.pop()
-        #     if e.status != STATUS_EXEC.DONE:
-        #         continue
-        #     cash_amt = self.book[e.ticker].instr.to_num(e.qty, e.price)
-        #     self.book[e.ticker].cash += cash_amt
-        #     self.book[e.ticker].position += e.qty
 
     #fonctions de transition
     def trans_stop(self, stm, data):
         return ALGO_STATES.STOPPED
+
+    def trans_update(self, stm, data):
+        for i, inst in enumerate(self.instr_list):
+            self.book[inst].last = data[i]
+        return ALGO_STATES.PL
 
     def trans_idle(self, stm, data):
         if isinstance(stm, MStream):
@@ -106,7 +102,7 @@ class Algo(Fsm):
         elif isinstance(stm, CStream):
             return ALGO_STATES.SIGNAL
         elif isinstance(stm, GenStream):
-            return ALGO_STATES.PL
+            return ALGO_STATES.UPDATE
         else:
             raise ValueError('unknown stream')
         #     pass
@@ -114,29 +110,33 @@ class Algo(Fsm):
         #     return ALGO_STATES.SIGNAL
 
     def trans_position(self, stm, data):
-        return ALGO_STATES.IDLE
+        i, status, pce, qty, cli = data
+        if (cli == self) and (status == EXEC_STATUS.FILLED):
+            self.book[i].position += qty
+            rel_cash = i.asset.to_num(qty, pce)
+            self.book[i].cash += rel_cash
+        return ALGO_STATES.PL
 
     def trans_pl(self, stm, data):
-        # if data.ticker in self.book:
-        #     if self.book[data.ticker].position != 0:
-        #         return ALGO_STATES.CHECK_PL
-        return ALGO_STATES.SIGNAL
+        pl = 0.0
+        for k, v in self.book.items():
+            v.pl_last = k.asset.to_num(-v.position, v.last) + v.cash
+            pl += v.pl_last
+        self.pl_last = pl
+        return ALGO_STATES.CHECK_PL
 
     def trans_check_pl(self, stm, data):
-        # we know that it s a traded asset
-        # self.book[data.ticker].valo = data.last
-        # self.pl_last = self.compute_pl()
-        # if self.pl_last < self.pl_limit:
-        #     return ALGO_STATES.STOPPED
-        return ALGO_STATES.SIGNAL
+        if self.pl_last < self.pl_limit:
+            return ALGO_STATES.STOPPED
+        return ALGO_STATES.IDLE
 
     def trans_signal(self, stm, data):
         got_sig = np.abs(data) > self.sigma
         sig = np.sign(data) * got_sig
         for i, inst in enumerate(self.instr_list):
-            tgt_qty = - sig[i]
+            tgt_qty = - sig[i] - self.book[inst].position
             if not self.orders[inst]:
-                if not my_sig:
+                if not tgt_qty:
                     continue
                 inst.send_order(ORDER_STATUS.HIT, tgt_qty, self)
             else:
