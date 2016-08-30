@@ -6,6 +6,8 @@ more than one signal
 
 from enum import Enum
 from .utils import coroutine
+import asyncio
+import time
 
 from ..market.dealing import ORDER_STATUS, EXEC_STATUS
 
@@ -42,7 +44,7 @@ class GenStream(SrcStream, ParentStream):
     def read(self):
         self.m = next(self.g)
         if self.tracker:
-            self.tracker.append(self.m)
+            self.tracker.send(self.m)
         for x in self.q:
             x.send(self.m)
         yield self.m
@@ -171,28 +173,37 @@ class SeqSrcStreamSelector:
             self.stm_map[stm] = cb
             self.seq.append(stm)
 
+    @asyncio.coroutine
     def select(self):
-        if not self.seq:
-            raise ValueError('SeqSrc stream must have at least one src registered')
-        # evts = []
-        self.n += 1
-        self.i = (self.i + 1) % len(self.seq)
-        stm = self.seq[self.i]
-        # traverse tree
-        _q = [stm]
-        while _q:
-            x = _q.pop()
-            if isinstance(x, SrcStream):
-                if self.stm_map[x] is None:
-                    next(x.read()) # needs to consume the gen without doing anything please check
+        while True:
+            print('another loop')
+            if not self.seq:
+                raise ValueError('SeqSrc stream must have at least one src registered')
+            # evts = []
+            self.n += 1
+            self.i = (self.i + 1) % len(self.seq)
+            stm = self.seq[self.i]
+            # traverse tree
+            _q = [stm]
+            while _q:
+                x = _q.pop()
+                if isinstance(x, SrcStream):
+                    if self.stm_map[x] is None:
+                        next(x.read()) # needs to consume the gen without doing anything please check
+                    else:
+                        # yield from map(self.stm_map[x], x.read())
+                        for data in x.read():
+                            # print(data)
+                            self.stm_map[x](data)
+                elif isinstance(x, LeafStream):
+                    for data in x.read():
+                        # print(data)s
+                        self.stm_map[x](data)
                 else:
-                    yield from map(self.stm_map[x], x.read())
-            elif isinstance(x, LeafStream):
-                yield from map(self.stm_map[x], x.read())
-            else:
-                raise ValueError()
-            # if stream is leaf then stm_q = []
-            for y in x.stm_q:
-                if self.is_registered(y):
-                    _q.append(y)
+                    raise ValueError()
+                # if stream is leaf then stm_q = []
+                for y in x.stm_q:
+                    if self.is_registered(y):
+                        _q.append(y)
+            yield from asyncio.sleep(0.25)
 

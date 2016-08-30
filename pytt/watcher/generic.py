@@ -1,8 +1,9 @@
 """
 generic monitoring of algo and streams
 """
-import threading
+import asyncio
 import queue
+import time
 
 
 class EventTracker:
@@ -14,24 +15,18 @@ class EventTracker:
     the threadsafe q and notified thanks to the condition cond
     """
 
-    def __init__(self, q, cond):
-        self.q = q
-        self.cond = cond
-        self.cond.acquire()
+    def __init__(self):
+        self.q = queue.Queue()
 
-    def append(self, what):
+    def send(self, what):
         """
         we can imagine other append which only append when a certain number
         of events have been appended
         """
-        self.cond.acquire()
-        # any additional args ?
         self.q.put(what)
-        self.cond.notify()
-        self.cond.release()
 
 
-class EventDispatcher(threading.Thread):
+class EventDispatcher:
     """
     runs in monitoring thread
     - shares with the eventtracker the q and condition for message passing
@@ -39,21 +34,21 @@ class EventDispatcher(threading.Thread):
     """
 
     def __init__(self, evt_tracker):
-        super().__init__()
-        self.daemon = True
         self.q = evt_tracker.q
-        self.cond = evt_tracker.cond
 
+    # @asyncio.coroutine
+    # def _r(self):
+    #     yield from iter(self.q.get, None)
+
+    @asyncio.coroutine
     def run(self):
-         while True:
-            self.cond.acquire()
-            print('TODO : never reaches here this is a problem')
-            while True:
-                if self.q:
-                    data = self.q.get()
-                    print('got data %s' % data)
-                    # dontknow about this...
-                    break
-                self.cond.wait()
-            self.cond.release()
+        print('gros prouti')
+        while True:
+            print('ff')
+            while not self.q.empty():
+                data = self.q.get()
+                print('got data %s' % data)
+            print(self.q.qsize())
+            yield from asyncio.sleep(1)
+
 

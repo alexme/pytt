@@ -17,8 +17,9 @@ streams are :
 """
 
 from functools import partial
-import threading
+import asyncio
 import queue
+from concurrent.futures import ThreadPoolExecutor
 
 from .streams.model import gbm_source
 from .machines.trader import Algo
@@ -28,16 +29,14 @@ from .watcher.generic import EventTracker, EventDispatcher
 from .market.asset import Instrument, Future
 import pdb
 
+# @asyncio.coroutine
 def main():
     # intruments
     f1 = Instrument(Future('f1', 5))
     f2 = Instrument(Future('f2', 10))
     # monitoring
-    q = queue.Queue()
-    cond = threading.Condition()
-    et = EventTracker(q, cond)
+    et = EventTracker()
     w = EventDispatcher(et)
-    w.start()
     # streams
     sstream = GenStream(0, gbm_source(2), et)
     sstream1 = GenStream(1, gbm_source(1))
@@ -55,14 +54,19 @@ def main():
     sel.register(cstream, cb_com)
     sel.register(mstream, cb_mkt)
     # sel.register(sstream, lambda x: x)
-    i = 0
-    while True:
-        i += 1
-        for evts in sel.select():
-            for x in a.book.values():
-                print(x)
-        if i > 20:
-            break
+    # executor = ThreadPoolExecutor()
+    # asyncio.ensure_future(loop.run_in_executor(executor, sel.select))
+    # yield from w.run()
+    asyncio.ensure_future(sel.select())
+    asyncio.ensure_future(w.run())
 
 if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
     main()
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        print('exit')
+    finally:
+        loop.stop()
+        loop.close()
