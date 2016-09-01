@@ -25,7 +25,7 @@ from .streams.model import gbm_source
 from .machines.trader import Algo
 from .streams.utils import ZS
 from .streams.abstract import SeqSrcStreamSelector, GenStream, CStream, MStream
-from .watcher.generic import EventTracker, EventDispatcher
+from .watcher.generic import EventDispatcher, WsHandler
 from .market.asset import Instrument, Future
 import pdb
 
@@ -35,10 +35,11 @@ def main():
     f1 = Instrument(Future('f1', 5))
     f2 = Instrument(Future('f2', 10))
     # monitoring
-    et = EventTracker()
-    w = EventDispatcher(et)
+    # et = EventTracker()
+    ws = WsHandler()
+    w = EventDispatcher([ws])
     # streams
-    sstream = GenStream(0, gbm_source(2), et)
+    sstream = GenStream(0, gbm_source(2), w)
     sstream1 = GenStream(1, gbm_source(1))
     cstream = CStream(2, sstream, ZS(10))
     mstream = MStream(3, [f1, f2], sstream)
@@ -68,5 +69,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print('exit')
     finally:
+        #close the handlers !
         loop.stop()
         loop.close()

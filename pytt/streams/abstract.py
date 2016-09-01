@@ -33,18 +33,20 @@ class ParentStream:
 
 
 class GenStream(SrcStream, ParentStream):
-    def __init__(self, sid, g, evt_tracker = None):
+    def __init__(self, sid, g, dispatcher = None):
         self.sid = sid
         self.g = g
         self.q = []
         self.m = None
         self.stm_q = []
-        self.tracker = evt_tracker
+        self.dispatcher = dispatcher
 
     def read(self):
         self.m = next(self.g)
-        if self.tracker:
-            self.tracker.send(self.m)
+        if self.dispatcher:
+            print("->", self.m)
+            # asyncio.async(self.dispatcher.send(self.m))
+            print(self.m)
         for x in self.q:
             x.send(self.m)
         yield self.m
@@ -145,7 +147,7 @@ class SeqSrcStreamSelector:
         # self.src_q = {}
         # self.leaf_q = {}
         self.seq = []
-        self.i = self.n = 0
+        self.i = 0
 
     def is_registered(self, stm):
         # a bit more tricky than could be thought
@@ -180,8 +182,8 @@ class SeqSrcStreamSelector:
             if not self.seq:
                 raise ValueError('SeqSrc stream must have at least one src registered')
             # evts = []
-            self.n += 1
             self.i = (self.i + 1) % len(self.seq)
+            # 
             stm = self.seq[self.i]
             # traverse tree
             _q = [stm]
@@ -193,11 +195,11 @@ class SeqSrcStreamSelector:
                     else:
                         # yield from map(self.stm_map[x], x.read())
                         for data in x.read():
-                            # print(data)
                             self.stm_map[x](data)
                 elif isinstance(x, LeafStream):
                     for data in x.read():
                         # print(data)s
+                        # data = yield from x.read()
                         self.stm_map[x](data)
                 else:
                     raise ValueError()
