@@ -38,7 +38,10 @@ class EventDispatcher:
         we can imagine other append which only append when a certain number
         of events have been appended
         """
+        print("$$$")
+        print(data)
         yield from self.q.put(data)
+        print("$$$" + str(data))
 
     @asyncio.coroutine
     def run(self):

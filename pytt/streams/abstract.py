@@ -45,7 +45,7 @@ class GenStream(SrcStream, ParentStream):
         self.m = next(self.g)
         if self.dispatcher:
             print("->", self.m)
-            # asyncio.async(self.dispatcher.send(self.m))
+            asyncio.ensure_future(self.dispatcher.send(self.m))
             print(self.m)
         for x in self.q:
             x.send(self.m)
