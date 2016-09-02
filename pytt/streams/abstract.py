@@ -40,17 +40,23 @@ class GenStream(SrcStream, ParentStream):
         self.m = None
         self.stm_q = []
         self.dispatcher = dispatcher
+        # if not dispatcher:
+        #     self.read = self._read
+        # else:
+        #     self.read = self._no_dispatch_read
 
     def read(self):
         self.m = next(self.g)
-        if self.dispatcher:
-            print("->", self.m)
-            asyncio.ensure_future(self.dispatcher.send(self.m))
-            print(self.m)
+        asyncio.ensure_future(self.dispatcher.send(self.m))
         for x in self.q:
             x.send(self.m)
         yield self.m
-        # return ParentStream.update_childs(self)
+    
+    def _no_dispatch_read(self):
+        self.m = next(self.g)
+        for x in self.q:
+            x.send(self.m)
+        yield self.m
 
 
 class CStream(LeafStream, ParentStream):

@@ -35,27 +35,23 @@ class EventDispatcher:
     @asyncio.coroutine
     def send(self, data):
         """
-        we can imagine other append which only append when a certain number
-        of events have been appended
+        ONLY APPEND IMMUTABLE DATA IN AN ASYNCIO Q
         """
-        print("$$$")
-        print(data)
-        yield from self.q.put(data)
-        print("$$$" + str(data))
+        data_str = EventDispatcher.marshal(data)
+        yield from self.q.put(data_str)
+
+    @staticmethod
+    def marshal(data):
+        return np.array2string( data, precision=1, suppress_small=True, separator=',' )
 
     @asyncio.coroutine
     def run(self):
         while True:
-            print(self.q)
             while not self.q.empty():
                 data = yield from self.q.get()
                 self.q.task_done()
-                data_str = "%s" % data
-                print('sent to handler is %s' % data_str)
-                
-                # for h in self.handlers:
-                #     # data_str = np.array2string(data, precision=2, suppress_small=True, separator=',')
-                #     yield from h.send(data_str)
+                for h in self.handlers:
+                    yield from h.send(data)
             yield from asyncio.sleep(1)
 
 

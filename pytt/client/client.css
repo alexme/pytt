@@ -8,3 +8,7 @@
   stroke: #000;
   shape-rendering: crispEdges;
 }
+
+div#chart {
+    background-color: #ff0022;
+}
