@@ -5,8 +5,10 @@ import asyncio
 import queue
 import time
 import websockets
+import aiofiles
 import pdb
 import numpy as np
+from enum import Enum
 
 # class EventTracker:
 #     """
@@ -19,7 +21,7 @@ import numpy as np
 
 #     def __init__(self):
 #         self.q = queue.Queue()
-
+PLD_CAT = Enum('CatPayload', ('PL', 'STREAM', 'POSITIONS'))
 
 class EventDispatcher:
     """
@@ -33,25 +35,31 @@ class EventDispatcher:
         self.handlers = handlers
 
     @asyncio.coroutine
-    def send(self, data):
+    def send(self, sid, cat, data):
         """
         ONLY APPEND IMMUTABLE DATA IN AN ASYNCIO Q
         """
-        data_str = EventDispatcher.marshal(data)
-        yield from self.q.put(data_str)
+        pld_str = EventDispatcher.marshal(sid, cat, data)
+        yield from self.q.put(pld_str)
 
     @staticmethod
-    def marshal(data):
-        return np.array2string( data, precision=1, suppress_small=True, separator=',' )
+    def marshal(aid, cat, data):
+        if isinstance(data, np.ndarray):
+            data_str = np.array2string( data, precision=1, suppress_small=True, separator=',' )
+        else:
+            data_str = "%s" % data
+        id_str = "%s" % aid
+        cat_str = "%s" % cat
+        return "|".join((id_str, cat_str, data_str))
 
     @asyncio.coroutine
     def run(self):
         while True:
             while not self.q.empty():
-                data = yield from self.q.get()
+                pld = yield from self.q.get()
                 self.q.task_done()
                 for h in self.handlers:
-                    yield from h.send(data)
+                    yield from h.send(pld)
             yield from asyncio.sleep(1)
 
 
@@ -69,13 +77,33 @@ class Handler:
         yield from self.q.put(data_str)
 
     def close():
-        #don t like it but can I avoid this ?
-        #when calling it ?
+        # call it in the finally of main loop
+        # closed with the asyncio loop
         pass
 
 class FileHandler(Handler):
     def __init__(self, ffn):
         super().__init__()
+        self.ffn = ffn
+        self.fh = None
+        asyncio.ensure_future(self.run(ffn))
+
+    @asyncio.coroutine
+    def run(self, ffn):
+        self.fh = yield from aiofiles.open(ffn, mode='w')
+        while True:
+            while not self.q.empty():
+                pld_str = yield from self.q.get()
+                self.q.task_done()
+                yield from fh.write(pld_str)
+            yield from asyncio.sleep(1)
+
+    @asyncio.coroutine
+    def close(self):
+        print("closing file %s" % self.ffn)
+        yield from self.fh.close()
+        print("file closed")
+
 
 class WsHandler(Handler):
     def __init__(self, host='127.0.0.1', port=5678):
@@ -86,10 +114,9 @@ class WsHandler(Handler):
     def ws_handler(self, websocket, path):
         while True:
             while not self.q.empty():
-                print('wait t send')
-                data = yield from self.q.get()
+                pld_str = yield from self.q.get()
                 self.q.task_done()
-                print('sending data %s' % data)
-                yield from websocket.send(data)
+                print('sending data %s' % pld_str)
+                yield from websocket.send(pld_str)
             print('q is empty')
             yield from asyncio.sleep(1)

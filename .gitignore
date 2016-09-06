@@ -9,6 +9,9 @@ __pycache__/
 # C extensions
 *.so
 
+# text should only be used for debug
+*.txt
+
 # Distribution / packaging
 .Python
 env/

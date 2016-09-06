@@ -25,26 +25,28 @@ from .streams.model import gbm_source
 from .machines.trader import Algo
 from .streams.utils import ZS
 from .streams.abstract import SeqSrcStreamSelector, GenStream, CStream, MStream
-from .watcher.generic import EventDispatcher, WsHandler
+from .watcher.generic import EventDispatcher, WsHandler, FileHandler
 from .market.asset import Instrument, Future
 import pdb
 
 # @asyncio.coroutine
 def main():
+    # TODO : clean this f** mess
+    ws_h = WsHandler()
+    fh = FileHandler('debug.txt')
+    ed = EventDispatcher([ws_h])
     # intruments
     f1 = Instrument(Future('f1', 5))
     f2 = Instrument(Future('f2', 10))
     # monitoring
     # et = EventTracker()
-    ws = WsHandler()
-    w = EventDispatcher([ws])
     # streams
-    sstream = GenStream(0, gbm_source(2), w)
+    sstream = GenStream(0, gbm_source(2), ed)
     sstream1 = GenStream(1, gbm_source(1))
     cstream = CStream(2, sstream, ZS(10))
     mstream = MStream(3, [f1, f2], sstream)
     # algo
-    a = Algo([f1, f2], cstream, -10000)
+    a = Algo(4, [f1, f2], cstream, -10000, ed)
     # algo callbacks
     cb_src = partial(a.one_loop, sstream)
     cb_com = partial(a.one_loop, cstream)
@@ -59,16 +61,21 @@ def main():
     # asyncio.ensure_future(loop.run_in_executor(executor, sel.select))
     # yield from w.run()
     asyncio.ensure_future(sel.select())
-    asyncio.ensure_future(w.run())
-
-if __name__ == "__main__":
+    asyncio.ensure_future(ed.run())
+    # loopy loop
     loop = asyncio.get_event_loop()
-    main()
+    # et ils pomperent...
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         print('exit')
     finally:
-        #close the handlers !
+        #close the handlers
+        ws_h.close()
+        fh.close()
+        # and the loop
         loop.stop()
         loop.close()
+
+if __name__ == "__main__":
+    main()

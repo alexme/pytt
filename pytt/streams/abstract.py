@@ -10,6 +10,7 @@ import asyncio
 import time
 
 from ..market.dealing import ORDER_STATUS, EXEC_STATUS
+from ..watcher.generic import PLD_CAT
 
 import pdb
 
@@ -47,16 +48,16 @@ class GenStream(SrcStream, ParentStream):
 
     def read(self):
         self.m = next(self.g)
-        asyncio.ensure_future(self.dispatcher.send(self.m))
+        asyncio.ensure_future(self.dispatcher.send(self.sid, PLD_CAT.STREAM, self.m))
         for x in self.q:
             x.send(self.m)
         yield self.m
     
-    def _no_dispatch_read(self):
-        self.m = next(self.g)
-        for x in self.q:
-            x.send(self.m)
-        yield self.m
+    # def _no_dispatch_read(self):
+    #     self.m = next(self.g)
+    #     for x in self.q:
+    #         x.send(self.m)
+    #     yield self.m
 
 
 class CStream(LeafStream, ParentStream):

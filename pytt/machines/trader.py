@@ -10,11 +10,13 @@ an Algo in an FSM which :
 from enum import Enum
 import numpy as np
 from collections import defaultdict
+import asyncio
 
 from .fsm import Fsm
 # from ..market.dealing import Order
 from ..market.dealing import ORDER_STATUS, EXEC_STATUS
 from ..streams.abstract import MStream, CStream, GenStream
+from ..watcher.generic import PLD_CAT
 
 # consts
 ALGO_STATES = Enum('Algo_States', ['IDLE', 'SIGNAL', 'POSITION', 'PL', 'CHECK_PL', 'UPDATE', 'STOPPED'])
@@ -49,7 +51,9 @@ class Algo(Fsm):
     marketstream -> compute position 
     """
 
-    def __init__(self, instr_list, signal, pl_limit):
+    def __init__(self, aid, instr_list, signal, pl_limit, dispatcher):
+        self.aid = aid
+        self.dispatch = dispatcher
         # FSM
         t_tbl = { ALGO_STATES.IDLE: self.trans_idle,
                   ALGO_STATES.PL: self.trans_pl,
@@ -75,12 +79,12 @@ class Algo(Fsm):
         self.next_to(ALGO_STATES.IDLE, stm, data)
         # yield from self.next_to(ALGO_STATES.IDLE, stm, data)
 
-    # methods
-    def check_limit(self, tgt_position):
-        # can t be a state as its needs some tgt
-        # otherwise we could send orders and go to a check_limit state
-        # and cancel orders actually probably not a great idea
-        pass
+    # # methods
+    # def check_limit(self, tgt_position):
+    #     # can t be a state as its needs some tgt
+    #     # otherwise we could send orders and go to a check_limit state
+    #     # and cancel orders actually probably not a great idea
+    #     pass
 
     # end transition fun
     def to_idle(self, stm, data):
@@ -123,6 +127,7 @@ class Algo(Fsm):
             v.pl_last = k.asset.to_num(-v.position, v.last) + v.cash
             pl += v.pl_last
         self.pl_last = pl
+        asyncio.ensure_future(self.dispatch.send(self.aid, PLD_CAT.PL, self.pl_last))
         return ALGO_STATES.CHECK_PL
 
     def trans_check_pl(self, stm, data):
