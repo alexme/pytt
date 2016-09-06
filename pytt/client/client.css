@@ -9,6 +9,14 @@
   shape-rendering: crispEdges;
 }
 
-div#chart {
-    background-color: #ff0022;
+div#data {
+    background-color: #DDDDDD;
+}
+
+div#pl {
+    background-color: #FFDC00;
+}
+
+div#position {
+    background-color: #FF851B;
 }
