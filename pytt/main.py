@@ -34,7 +34,7 @@ def main():
     # TODO : clean this f** mess
     ws_h = WsHandler()
     fh = FileHandler('debug.txt')
-    ed = EventDispatcher([ws_h])
+    ed = EventDispatcher([ws_h, fh])
     # intruments
     f1 = Instrument(Future('f1', 5))
     f2 = Instrument(Future('f2', 10))
@@ -70,6 +70,9 @@ def main():
     except KeyboardInterrupt:
         print('exit')
     finally:
+        pending = asyncio.Task.all_tasks()
+        for t in pending:
+            t.cancel()
         #close the handlers
         ws_h.close()
         fh.close()

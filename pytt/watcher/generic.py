@@ -76,10 +76,10 @@ class Handler:
     def send(self, data_str):
         yield from self.q.put(data_str)
 
-    def close():
+    def close(self):
         # call it in the finally of main loop
         # closed with the asyncio loop
-        pass
+        print('closing handler')
 
 class FileHandler(Handler):
     def __init__(self, ffn):
@@ -91,17 +91,20 @@ class FileHandler(Handler):
     @asyncio.coroutine
     def run(self, ffn):
         self.fh = yield from aiofiles.open(ffn, mode='w')
-        while True:
-            while not self.q.empty():
-                pld_str = yield from self.q.get()
-                self.q.task_done()
-                yield from fh.write(pld_str)
-            yield from asyncio.sleep(1)
+        try:
+            while True:
+                while not self.q.empty():
+                    pld_str = yield from self.q.get()
+                    self.q.task_done()
+                    yield from self.fh.write(pld_str)
+                yield from asyncio.sleep(1)
+        except asyncio.CancelledError:
+            self.close()
 
-    @asyncio.coroutine
     def close(self):
+        super().close()
         print("closing file %s" % self.ffn)
-        yield from self.fh.close()
+        # yield from self.fh.close()
         print("file closed")
 
 
@@ -112,11 +115,14 @@ class WsHandler(Handler):
 
     @asyncio.coroutine
     def ws_handler(self, websocket, path):
-        while True:
-            while not self.q.empty():
-                pld_str = yield from self.q.get()
-                self.q.task_done()
-                print('sending data %s' % pld_str)
-                yield from websocket.send(pld_str)
-            print('q is empty')
-            yield from asyncio.sleep(1)
+        try:
+            while True:
+                while not self.q.empty():
+                    pld_str = yield from self.q.get()
+                    self.q.task_done()
+                    print('sending data %s' % pld_str)
+                    yield from websocket.send(pld_str)
+                yield from asyncio.sleep(1)
+        except asyncio.CancelledError:
+            self.close()
+
